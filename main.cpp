@@ -18,8 +18,8 @@ void singlepipe(){
         // // write(fds[1],str,sizeof(str));//这里如果使用sizeof，则会发送512个字节过去，至于后面那些字节是什么内容无法保证！
         // printf("len:%d\n",len);
         printf("%d %d\n",fds[0],fds[1]);
-        close(fds[1]);//对应父进程来讲，它不用写端之后就可以关闭了
-        close(fds[0]);//不用读端，就直接关闭，此时pipe的引用计数-1，当pipe的引用计数==0时，内核会回收掉pipe
+        close(fds[1]);//对应父进程来讲，它不用写端之后就可以关闭了，writers--
+        close(fds[0]);//不用读端，就直接关闭，此时pipe的引用计数-1，当pipe的引用计数==0时，内核会回收掉pipe，，readers--
     }else if (pid > 0){
         int len = read(fds[0],buffer,sizeof(buffer));//第三个参数表示最大可以接收多少字节
         printf("len_read:%d\n",len);
@@ -28,6 +28,17 @@ void singlepipe(){
         if (pid2 == 0){
             // printf("hahahha\n");
             int len = read(fds[0],buffer,sizeof(buffer));//水(数据)已经被它的父进程接了(read)，管道里面是空的，同时write的进程也关闭了，所以这里直接返回0，读了空数据
+            //这里补充一下在管道里面read的阻塞机制，分三种情况
+            //1.管道缓冲区有数据，马上返回实际读取字节数
+            //2.管道缓冲区无数据，如果还有除了当前进程外其余与该管道有联系的进程还持有写端，那就会阻塞等待
+            //3.管道缓存区无数据，同时其他进程的写端全关闭了，直接返回0
+
+
+            //每个管道在内核都维护两个引用计数
+            //readers: 当前有多少进程（或fd）持有读端
+            //writers: 当前有多少进程（或fd）持有写端
+            //read() 时 writers==0	read 返回 0（EOF）
+            //write() 时 readers==0	write 返回 -1，errno=EPIPE，并产生 SIGPIPE 信号
             printf("%s\n",buffer);
 
             //关闭孙进程的读写端
